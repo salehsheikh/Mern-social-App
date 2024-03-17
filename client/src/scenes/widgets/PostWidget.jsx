@@ -21,10 +21,12 @@ const PostWidget = ({
   picturePath,
   userPicturePath,
   likes,
-  comments,
+  comments: initialComments, // Rename 'comments' prop to 'initialComments'
 }) => {
   const [isComments, setIsComments] = useState(false);
   const [commentText, setCommentText] = useState("");
+  const [editedComment, setEditedComment] = useState(""); // State for edited comment text
+  const [editedCommentId, setEditedCommentId] = useState(""); // State for edited comment ID
   const dispatch = useDispatch();
   const loggedInUserId = useSelector((state) => state.user._id);
   const isLiked = Boolean(likes[loggedInUserId]);
@@ -69,7 +71,55 @@ const PostWidget = ({
     }
   };
 
-
+  const handleCommentEdit = async (commentId) => {
+    try {
+      // Check if commentId is valid
+      if (!commentId) {
+        console.error("Comment ID is missing for edit");
+        return;
+      }
+      const response = await fetch(
+        `http://localhost:3001/posts/${postId}/comment/${commentId}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ comment: editedComment }),
+        }
+      );
+      const updatedPost = await response.json();
+      dispatch(setPost({ post: updatedPost }));
+      setEditedComment("");
+      setEditedCommentId("");
+    } catch (error) {
+      console.error("Error updating comment:", error);
+    }
+  };
+  
+  const handleCommentDelete = async (commentId) => {
+    if (!commentId) {
+      console.error("Comment ID is missing for deletion");
+      return;
+    }
+    try {
+      const response = await fetch(
+        `http://localhost:3001/posts/${postId}/comment/${commentId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      const updatedPost = await response.json();
+      dispatch(setPost({ post: updatedPost }));
+    } catch (error) {
+      console.error("Error deleting comment:", error);
+    }
+  };
+  
   const handleShareToWhatsApp = () => {
     // Replace 'post-url' with the actual URL of the post
     window.open(`https://api.whatsapp.com/send?text=post-url`, "_blank");
@@ -112,7 +162,7 @@ const PostWidget = ({
             <IconButton onClick={() => setIsComments(!isComments)}>
               <ChatBubbleOutlineOutlined />
             </IconButton>
-            <Typography>{comments.length}</Typography>
+            <Typography>{initialComments.length}</Typography>
           </FlexBetween>
         </FlexBetween>
 
@@ -132,12 +182,43 @@ const PostWidget = ({
             style={{ width: "100%", padding: "0.5rem", marginBottom: "0.5rem" }}
           />
           <button onClick={handleCommentSubmit}>Submit</button>
-          {comments.map((comment, i) => (
+          {initialComments.map((comment, i) => (
             <Box key={`${postId}-${i}`}>
               <Divider />
-              <Typography sx={{ color: main, m: "0.5rem 0", pl: "1rem" }}>
-                <strong>{comment.userId}</strong>: {comment.comment}
-              </Typography>
+              {comment.userId === loggedInUserId ? ( // Check if the comment is by the logged-in user
+                <Box sx={{ display: "flex", alignItems: "center" }}>
+                  <Typography sx={{ color: main, m: "0.5rem 0", pl: "1rem", flex: 1 }}>
+                    <strong>{comment.userId}</strong>: {editedCommentId === comment._id ? ( // Check if the comment is being edited
+                      <input
+                        type="text"
+                        value={editedComment}
+                        onChange={(e) => setEditedComment(e.target.value)}
+                      />
+                    ) : (
+                      comment.comment
+                    )}
+                  </Typography>
+                  {editedCommentId === comment._id ? (
+                    <IconButton onClick={() => handleCommentEdit(comment._id)}>
+                      Save
+                    </IconButton>
+                  ) : (
+                    <IconButton onClick={() => {
+                      setEditedComment(comment.comment);
+                      setEditedCommentId(comment._id);
+                    }}>
+                      Edit
+                    </IconButton>
+                  )}
+                  <IconButton onClick={() => handleCommentDelete(comment._id)}>
+                    Delete
+                  </IconButton>
+                </Box>
+              ) : (
+                <Typography sx={{ color: main, m: "0.5rem 0", pl: "1rem" }}>
+                  <strong>{comment.userId}</strong>: {comment}
+                </Typography>
+              )}
             </Box>
           ))}
           <Divider />
